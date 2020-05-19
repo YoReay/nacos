@@ -25,10 +25,13 @@ import {
   Dialog,
   Message,
   ConfigProvider,
+  Switch,
 } from '@alifd/next';
 import { request } from '../../../globalLib';
+import { generateUrl } from '../../../utils/nacosutil';
 import RegionGroup from '../../../components/RegionGroup';
 import EditServiceDialog from '../ServiceDetail/EditServiceDialog';
+import ShowServiceCodeing from 'components/ShowCodeing/ShowServiceCodeing';
 
 import './ServiceList.scss';
 
@@ -48,13 +51,18 @@ class ServiceList extends React.Component {
   constructor(props) {
     super(props);
     this.editServiceDialog = React.createRef();
+    this.showcode = React.createRef();
     this.state = {
       loading: false,
       total: 0,
       pageSize: 10,
       currentPage: 1,
-      keyword: '',
       dataSource: [],
+      search: {
+        serviceName: '',
+        groupName: '',
+      },
+      hasIpCount: !(localStorage.getItem('hasIpCount') === 'false'),
     };
     this.field = new Field(this);
   }
@@ -74,11 +82,17 @@ class ServiceList extends React.Component {
   }
 
   queryServiceList() {
-    const { currentPage, pageSize, keyword } = this.state;
-    const parameter = [`startPg=${currentPage}`, `pgSize=${pageSize}`, `keyword=${keyword}`];
+    const { currentPage, pageSize, search, withInstances = false, hasIpCount } = this.state;
+    const parameter = [
+      `hasIpCount=${hasIpCount}`,
+      `withInstances=${withInstances}`,
+      `pageNo=${currentPage}`,
+      `pageSize=${pageSize}`,
+      `serviceNameParam=${search.serviceName}`,
+      `groupNameParam=${search.groupName}`,
+    ];
     request({
-      url: `v1/ns/catalog/serviceList?${parameter.join('&')}`,
-      beforeSend: () => this.openLoading(),
+      url: `v1/ns/catalog/services?${parameter.join('&')}`,
       success: ({ count = 0, serviceList = [] } = {}) => {
         this.setState({
           dataSource: serviceList,
@@ -91,7 +105,6 @@ class ServiceList extends React.Component {
           total: 0,
           currentPage: 0,
         }),
-      complete: () => this.closeLoading(),
     });
   }
 
@@ -99,7 +112,21 @@ class ServiceList extends React.Component {
     setTimeout(() => this.queryServiceList());
   };
 
-  deleteService(serviceName) {
+  showcode = () => {
+    setTimeout(() => this.queryServiceList());
+  };
+
+  /**
+   *
+   * Added method to open sample code window
+   * @author yongchao9  #2019年05月18日 下午5:46:28
+   *
+   */
+  showSampleCode(record) {
+    this.showcode.current.getInstance().openDialog(record);
+  }
+
+  deleteService(service) {
     const { locale = {} } = this.props;
     const { prompt, promptDelete } = locale;
     Dialog.confirm({
@@ -108,7 +135,7 @@ class ServiceList extends React.Component {
       onOk: () => {
         request({
           method: 'DELETE',
-          url: `v1/ns/service?serviceName=${serviceName}`,
+          url: `v1/ns/service?serviceName=${service.name}&groupName=${service.groupName}`,
           dataType: 'text',
           beforeSend: () => this.openLoading(),
           success: res => {
@@ -140,13 +167,17 @@ class ServiceList extends React.Component {
       serviceList,
       serviceName,
       serviceNamePlaceholder,
+      groupName,
+      groupNamePlaceholder,
+      hiddenEmptyService,
       query,
       create,
       operation,
       detail,
+      sampleCode,
       deleteAction,
     } = locale;
-    const { keyword, nowNamespaceName, nowNamespaceId } = this.state;
+    const { search, nowNamespaceName, nowNamespaceId, hasIpCount } = this.state;
     const { init, getValue } = this.field;
     this.init = init;
     this.getValue = getValue;
@@ -155,7 +186,10 @@ class ServiceList extends React.Component {
       <div className="main-container service-management">
         <Loading
           shape="flower"
-          style={{ position: 'relative' }}
+          style={{
+            position: 'relative',
+            width: '100%',
+          }}
           visible={this.state.loading}
           tip="Loading..."
           color="#333"
@@ -172,17 +206,48 @@ class ServiceList extends React.Component {
             <span className="title-item">{nowNamespaceName}</span>
             <span className="title-item">{nowNamespaceId}</span>
           </h3>
-          <Row className="demo-row" style={{ marginBottom: 10, padding: 0 }}>
+          <Row
+            className="demo-row"
+            style={{
+              marginBottom: 10,
+              padding: 0,
+            }}
+          >
             <Col span="24">
               <Form inline field={this.field}>
                 <FormItem label={serviceName}>
                   <Input
                     placeholder={serviceNamePlaceholder}
                     style={{ width: 200 }}
-                    value={keyword}
-                    onChange={keyword => this.setState({ keyword })}
+                    value={search.serviceName}
+                    onChange={serviceName => this.setState({ search: { ...search, serviceName } })}
+                    onPressEnter={() =>
+                      this.setState({ currentPage: 1 }, () => this.queryServiceList())
+                    }
                   />
                 </FormItem>
+                <FormItem label={groupName}>
+                  <Input
+                    placeholder={groupNamePlaceholder}
+                    style={{ width: 200 }}
+                    value={search.groupName}
+                    onChange={groupName => this.setState({ search: { ...search, groupName } })}
+                    onPressEnter={() =>
+                      this.setState({ currentPage: 1 }, () => this.queryServiceList())
+                    }
+                  />
+                </FormItem>
+                <Form.Item label={`${hiddenEmptyService}:`}>
+                  <Switch
+                    checked={hasIpCount}
+                    onChange={hasIpCount =>
+                      this.setState({ hasIpCount, currentPage: 1 }, () => {
+                        localStorage.setItem('hasIpCount', hasIpCount);
+                        this.queryServiceList();
+                      })
+                    }
+                  />
+                </Form.Item>
                 <FormItem label="">
                   <Button
                     type="primary"
@@ -204,38 +269,47 @@ class ServiceList extends React.Component {
             <Col span="24" style={{ padding: 0 }}>
               <Table
                 dataSource={this.state.dataSource}
-                fixedHeader
-                maxBodyHeight={530}
                 locale={{ empty: pubNoData }}
                 getRowProps={row => this.rowColor(row)}
               >
                 <Column title={locale.columnServiceName} dataIndex="name" />
+                <Column title={locale.groupName} dataIndex="groupName" />
                 <Column title={locale.columnClusterCount} dataIndex="clusterCount" />
                 <Column title={locale.columnIpCount} dataIndex="ipCount" />
                 <Column
                   title={locale.columnHealthyInstanceCount}
                   dataIndex="healthyInstanceCount"
                 />
+                <Column title={locale.columnTriggerFlag} dataIndex="triggerFlag" />
                 <Column
                   title={operation}
                   align="center"
                   cell={(value, index, record) => (
+                    // @author yongchao9  #2019年05月18日 下午5:46:28
+                    /* Add a link to view "sample code"
+                     replace the original button with a label,
+                     which is consistent with the operation style in configuration management.
+                     */
                     <div>
-                      <Button
-                        type="normal"
-                        onClick={() =>
-                          this.props.history.push(`/serviceDetail?name=${record.name}`)
-                        }
+                      <a
+                        onClick={() => {
+                          const { name, groupName } = record;
+                          this.props.history.push(
+                            generateUrl('/serviceDetail', { name, groupName })
+                          );
+                        }}
+                        style={{ marginRight: 5 }}
                       >
                         {detail}
-                      </Button>
-                      <Button
-                        style={{ marginLeft: 12 }}
-                        type="normal"
-                        onClick={() => this.deleteService(record.name)}
-                      >
+                      </a>
+                      <span style={{ marginRight: 5 }}>|</span>
+                      <a style={{ marginRight: 5 }} onClick={() => this.showSampleCode(record)}>
+                        {sampleCode}
+                      </a>
+                      <span style={{ marginRight: 5 }}>|</span>
+                      <a onClick={() => this.deleteService(record)} style={{ marginRight: 5 }}>
                         {deleteAction}
-                      </Button>
+                      </a>
                     </div>
                   )}
                 />
@@ -243,7 +317,12 @@ class ServiceList extends React.Component {
             </Col>
           </Row>
           {this.state.total > this.state.pageSize && (
-            <div style={{ marginTop: 10, textAlign: 'right' }}>
+            <div
+              style={{
+                marginTop: 10,
+                textAlign: 'right',
+              }}
+            >
               <Pagination
                 current={this.state.currentPage}
                 total={this.state.total}
@@ -255,6 +334,7 @@ class ServiceList extends React.Component {
             </div>
           )}
         </Loading>
+        <ShowServiceCodeing ref={this.showcode} />
         <EditServiceDialog
           ref={this.editServiceDialog}
           openLoading={() => this.openLoading()}

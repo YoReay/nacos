@@ -15,8 +15,8 @@
  */
 package com.alibaba.nacos.naming.misc;
 
+import com.alibaba.nacos.core.utils.ApplicationUtils;
 import com.alibaba.nacos.core.utils.InetUtils;
-import com.alibaba.nacos.naming.boot.RunningConfig;
 import org.apache.commons.lang3.StringUtils;
 
 
@@ -25,25 +25,18 @@ import org.apache.commons.lang3.StringUtils;
  */
 public class NetUtils {
 
-    private static String serverAddress = null;
-
     public static String localServer() {
-        if (StringUtils.isNotBlank(serverAddress)) {
-            return serverAddress + UtilsAndCommons.CLUSTER_CONF_IP_SPLITER + RunningConfig.getServerPort();
-        }
-
-        serverAddress = InetUtils.getSelfIp();
-        return serverAddress + UtilsAndCommons.CLUSTER_CONF_IP_SPLITER + RunningConfig.getServerPort();
+        return InetUtils.getSelfIp() + UtilsAndCommons.IP_PORT_SPLITER + ApplicationUtils.getPort();
     }
 
     public static String num2ip(int ip) {
         int[] b = new int[4];
         String x = "";
 
-        b[0] = (int) ((ip >> 24) & 0xff);
-        b[1] = (int) ((ip >> 16) & 0xff);
-        b[2] = (int) ((ip >> 8) & 0xff);
-        b[3] = (int) (ip & 0xff);
+        b[0] = (ip >> 24) & 0xff;
+        b[1] = (ip >> 16) & 0xff;
+        b[2] = (ip >> 8) & 0xff;
+        b[3] = ip & 0xff;
         x = Integer.toString(b[0]) + "." + Integer.toString(b[1]) + "." + Integer.toString(b[2]) + "." + Integer.toString(b[3]);
 
         return x;

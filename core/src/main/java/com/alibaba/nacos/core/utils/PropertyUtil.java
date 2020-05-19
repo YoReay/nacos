@@ -16,6 +16,7 @@
 
 package com.alibaba.nacos.core.utils;
 
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,10 +35,10 @@ public class PropertyUtil {
     private static final Logger log = LoggerFactory.getLogger(PropertyUtil.class);
 
     static {
+        InputStream inputStream = null;
         try {
-            InputStream inputStream = null;
             String baseDir = System.getProperty("nacos.home");
-            if (!StringUtils.isBlank(baseDir)) {
+            if (StringUtils.isNotBlank(baseDir)) {
                 inputStream = new FileInputStream(baseDir + "/conf/application.properties");
             } else {
                 inputStream = PropertyUtil.class
@@ -46,6 +47,8 @@ public class PropertyUtil {
             properties.load(inputStream);
         } catch (Exception e) {
             log.error("read property file error:" + e);
+        } finally {
+            IOUtils.closeQuietly(inputStream);
         }
     }
 

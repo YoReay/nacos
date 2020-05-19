@@ -31,9 +31,10 @@ import com.alibaba.nacos.client.config.impl.HttpSimpleClient.HttpResult;
 import com.alibaba.nacos.client.config.impl.LocalConfigInfoProcessor;
 import com.alibaba.nacos.client.config.utils.ContentUtils;
 import com.alibaba.nacos.client.config.utils.ParamUtils;
-import com.alibaba.nacos.client.config.utils.TenantUtil;
 import com.alibaba.nacos.client.utils.LogUtils;
-import com.alibaba.nacos.client.utils.StringUtils;
+import com.alibaba.nacos.client.utils.ParamUtil;
+import com.alibaba.nacos.client.utils.ValidatorUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -53,7 +54,10 @@ public class NacosConfigService implements ConfigService {
 
     private static final Logger LOGGER = LogUtils.logger(NacosConfigService.class);
 
-    private final long POST_TIMEOUT = 3000L;
+    private static final long POST_TIMEOUT = 3000L;
+
+    private static final String EMPTY = "";
+
     /**
      * http agent
      */
@@ -67,28 +71,34 @@ public class NacosConfigService implements ConfigService {
     private ConfigFilterChainManager configFilterChainManager = new ConfigFilterChainManager();
 
     public NacosConfigService(Properties properties) throws NacosException {
+        ValidatorUtils.checkInitParam(properties);
         String encodeTmp = properties.getProperty(PropertyKeyConst.ENCODE);
         if (StringUtils.isBlank(encodeTmp)) {
             encode = Constants.ENCODE;
         } else {
             encode = encodeTmp.trim();
         }
-        String namespaceTmp = properties.getProperty(PropertyKeyConst.NAMESPACE);
-        if (StringUtils.isBlank(namespaceTmp)) {
-            namespace = TenantUtil.getUserTenant();
-            properties.put(PropertyKeyConst.NAMESPACE, namespace);
-        } else {
-            namespace = namespaceTmp;
-            properties.put(PropertyKeyConst.NAMESPACE, namespace);
-        }
+        initNamespace(properties);
         agent = new MetricsHttpAgent(new ServerHttpAgent(properties));
         agent.start();
-        worker = new ClientWorker(agent, configFilterChainManager);
+        worker = new ClientWorker(agent, configFilterChainManager, properties);
+    }
+
+    private void initNamespace(Properties properties) {
+        namespace = ParamUtil.parseNamespace(properties);
+        properties.put(PropertyKeyConst.NAMESPACE, namespace);
     }
 
     @Override
     public String getConfig(String dataId, String group, long timeoutMs) throws NacosException {
         return getConfigInner(namespace, dataId, group, timeoutMs);
+    }
+
+    @Override
+    public String getConfigAndSignListener(String dataId, String group, long timeoutMs, Listener listener) throws NacosException {
+        String content = getConfig(dataId, group, timeoutMs);
+        worker.addTenantListenersWithContent(dataId, group, content, Arrays.asList(listener));
+        return content;
     }
 
     @Override
@@ -132,9 +142,9 @@ public class NacosConfigService implements ConfigService {
         }
 
         try {
-            content = worker.getServerConfig(dataId, group, tenant, timeoutMs);
+            String[] ct = worker.getServerConfig(dataId, group, tenant, timeoutMs);
+            cr.setContent(ct[0]);
 
-            cr.setContent(content);
             configFilterChainManager.doFilter(null, cr);
             content = cr.getContent();
 
