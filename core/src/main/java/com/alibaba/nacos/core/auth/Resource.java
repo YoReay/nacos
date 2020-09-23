@@ -13,10 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.alibaba.nacos.core.auth;
-
-
-import com.alibaba.fastjson.JSON;
 
 import java.io.Serializable;
 
@@ -27,30 +25,32 @@ import java.io.Serializable;
  * @since 1.2.0
  */
 public class Resource implements Serializable {
-
+    
     public static final String SPLITTER = ":";
+    
     public static final String ANY = "*";
+    
     private static final long serialVersionUID = 925971662931204553L;
-
+    
     /**
      * The unique key of resource.
      */
     private String key;
-
+    
     public Resource(String key) {
         this.key = key;
     }
-
+    
     public String getKey() {
         return key;
     }
-
+    
     public String parseName() {
         return key.substring(0, key.lastIndexOf(SPLITTER));
     }
-
+    
     @Override
     public String toString() {
-        return JSON.toJSONString(this);
+        return "Resource{" + "key='" + key + '\'' + '}';
     }
 }
